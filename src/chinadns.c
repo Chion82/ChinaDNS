@@ -102,6 +102,10 @@ static net_list_t chnroute_list;
 static int parse_chnroute();
 static int test_ip_in_list(struct in_addr ip, const net_list_t *netlist);
 
+static char* ipset_name = NULL;
+static char* ipset_command = "/usr/bin/ipset";
+static int test_ip_in_ipset(struct in_addr ip);
+
 static int dns_init_sockets();
 static void dns_handle_local();
 static void dns_handle_remote();
@@ -241,7 +245,7 @@ static int setnonblock(int sock) {
 
 static int parse_args(int argc, char **argv) {
   int ch;
-  while ((ch = getopt(argc, argv, "hb:p:s:l:c:y:dmvV")) != -1) {
+  while ((ch = getopt(argc, argv, "hb:p:s:l:c:y:dmvS:C:V")) != -1) {
     switch (ch) {
       case 'h':
         usage();
@@ -272,6 +276,12 @@ static int parse_args(int argc, char **argv) {
         break;
       case 'v':
         verbose = 1;
+        break;
+      case 'S':
+        ipset_name = strdup(optarg);
+        break;
+      case 'C':
+        ipset_command = strdup(optarg);
         break;
       case 'V':
         printf("ChinaDNS %s\n", PACKAGE_VERSION);
@@ -353,7 +363,7 @@ static int resolve_dns_servers() {
       dns_server_addrs[i].addrlen = addr_ip->ai_addrlen;
       i++;
       token = strtok(0, ",");
-      if (chnroute_file) {
+      if (chnroute_file || ipset_name != NULL) {
         if (test_ip_in_list(((struct sockaddr_in *)addr_ip->ai_addr)->sin_addr,
                             &chnroute_list)) {
           has_chn_dns = 1;
@@ -363,7 +373,7 @@ static int resolve_dns_servers() {
       }
     }
   }
-  if (chnroute_file) {
+  if (chnroute_file || ipset_name != NULL) {
     if (!(has_chn_dns && has_foreign_dns)) {
       if (compression) {
         VERR("You should have at least one Chinese DNS and one foreign DNS when "
@@ -452,8 +462,13 @@ static int parse_chnroute() {
   chnroute_list.entries = 0;
   int i = 0;
 
-  if (chnroute_file == NULL) {
+  if (chnroute_file == NULL && ipset_name == NULL) {
     VERR("CHNROUTE_FILE not specified, CHNRoute is disabled\n");
+    return 0;
+  }
+
+  if (ipset_name != NULL) {
+    LOG("Using ipset %s as CHNRoute\n", ipset_name);
     return 0;
   }
 
@@ -499,7 +514,22 @@ static int parse_chnroute() {
   return 0;
 }
 
+static int test_ip_in_ipset(struct in_addr ip) {
+  char* ip_string = inet_ntoa(ip);
+  char command_buf[1024];
+  sprintf(command_buf, "%s test %s %s > /dev/null 2>&1", ipset_command, ipset_name, ip_string);
+  DLOG("Querying ipset with command: %s\n", command_buf);
+  if (system(command_buf) == 0) {
+    return 1;
+  } else {
+    return 0;
+  }
+}
+
 static int test_ip_in_list(struct in_addr ip, const net_list_t *netlist) {
+  if (ipset_name != NULL) {
+    return test_ip_in_ipset(ip);
+  }
   // binary search
   int l = 0, r = netlist->entries - 1;
   int m, cmp;
@@ -756,7 +786,7 @@ static int should_filter_query(ns_msg msg, struct in_addr dns_addr) {
   // TODO cache result for each dns server
   int dns_is_chn = 0;
   int dns_is_foreign = 0;
-  if (chnroute_file && (dns_servers_len > 1)) {
+  if ((chnroute_file && (dns_servers_len > 1)) || ipset_name != NULL) {
     dns_is_chn = test_ip_in_list(dns_addr, &chnroute_list);
     dns_is_foreign = !dns_is_chn;
   }
@@ -899,8 +929,8 @@ Forward DNS requests.\n\
 \n\
   -l IPLIST_FILE        path to ip blacklist file\n\
   -c CHNROUTE_FILE      path to china route file\n\
-                        if not specified, CHNRoute will be turned\n\
-  -d                    off enable bi-directional CHNRoute filter\n\
+                        if not specified, CHNRoute will be turned off\n\
+  -d                    enable bi-directional CHNRoute filter\n\
   -y                    delay time for suspects, default: 0.3\n\
   -b BIND_ADDR          address that listens, default: 0.0.0.0\n\
   -p BIND_PORT          port that listens, default: 53\n\
@@ -908,11 +938,13 @@ Forward DNS requests.\n\
                         114.114.114.114,208.67.222.222:443,8.8.8.8\n\
   -m                    use DNS compression pointer mutation\n\
                         (backlist and delaying would be disabled)\n\
+  -S NAME_OF_IPSET      name of set added in ipset which stores China routes\n\
+                        if specified, ChinaDNS will use ipset instead of chnroute file\n\
+  -C IPSET_COMMAND      command of the ipset tool, default:\n\
+                        /usr/bin/ipset\n\
   -v                    verbose logging\n\
   -h                    show this help message and exit\n\
   -V                    print version and exit\n\
 \n\
 Online help: <https://github.com/clowwindy/ChinaDNS>\n");
 }
-
-
