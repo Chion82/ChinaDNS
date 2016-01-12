@@ -96,10 +96,10 @@ Test if it works correctly:
     ;; Got answer:
     ;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 29845
     ;; flags: qr rd ra; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 0
-    
+
     ;; QUESTION SECTION:
     ;www.youtube.com.		IN	A
-    
+
     ;; ANSWER SECTION:
     www.youtube.com.	21569	IN	CNAME	youtube-ui.l.google.com.
     youtube-ui.l.google.com. 269	IN	A	216.58.220.174
@@ -115,11 +115,18 @@ add a redirect rule for TCP:
 
     iptables -t nat -A PREROUTING -p tcp --dport 53 -j DNAT --to-destination 8.8.8.8:53
 
+You can also use `ipset` as the source of China routes instead of `chnroute.txt`.
+If you use ShadowSocks on OpenWRT and enable `ss-redir` with an ignore list, the China
+route set is `ss_spec_wan_ac`:
+
+    chinadns -S ss_spec_wan_ac -s 114.114.114.114,8.8.8.8 -p 53
+
+
 Advanced
 --------
 
     usage: chinadns [-h] [-l IPLIST_FILE] [-b BIND_ADDR] [-p BIND_PORT]
-           [-c CHNROUTE_FILE] [-s DNS] [-v]
+           [-c CHNROUTE_FILE] [-s DNS] [-S NAME_OF_IPSET] [-C IPSET_COMMAND] [-m] [-v] [-V]
     Forward DNS requests.
 
     -h, --help            show this help message and exit
@@ -134,6 +141,10 @@ Advanced
                           114.114.114.114,208.67.222.222:443,8.8.8.8
     -m                    Using DNS compression pointer mutation
                           (backlist and delaying would be disabled)
+    -S NAME_OF_IPSET      name of set added in ipset which stores China routes
+                          if specified, ChinaDNS will use ipset instead of chnroute file
+    -C IPSET_COMMAND      command of the ipset tool, default:
+                          /usr/bin/ipset
     -v                    verbose logging
 
 About chnroute

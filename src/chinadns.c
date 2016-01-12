@@ -924,7 +924,7 @@ static void free_delay(int pos) {
 static void usage() {
   printf("%s\n", "\
 usage: chinadns [-h] [-l IPLIST_FILE] [-b BIND_ADDR] [-p BIND_PORT]\n\
-       [-c CHNROUTE_FILE] [-s DNS] [-m] [-v] [-V]\n\
+       [-c CHNROUTE_FILE] [-s DNS] [-S NAME_OF_IPSET] [-C IPSET_COMMAND] [-m] [-v] [-V]\n\
 Forward DNS requests.\n\
 \n\
   -l IPLIST_FILE        path to ip blacklist file\n\
